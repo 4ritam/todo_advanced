@@ -93,10 +93,64 @@ class TaskController extends GetxController {
         // In test mode, we don't show snackbars
         return;
       }
-      result.match(
-        (l) => Get.snackbar('Error', 'Failed to update task: ${l.toString()}'),
-        (_) => Get.snackbar('Success', 'Task updated successfully'),
-      );
+      if (result.isLeft()) {
+        Get.snackbar(
+          'Error',
+          'Failed to update task: ${result.getLeft().toString()}',
+        );
+        return;
+      }
+      loadTasks(); // Refresh the task list after toggling completion
     }
+  }
+
+  void sortByDueDate() {
+    _tasks.sort((a, b) => a.dueDate.compareTo(b.dueDate));
+    StorageService.saveTasks(_tasks);
+  }
+
+  void sortByPriority() {
+    _tasks.sort((a, b) => a.priority.val.compareTo(b.priority.val));
+    StorageService.saveTasks(_tasks);
+  }
+
+  void sortByTitle() {
+    _tasks.sort((a, b) => a.title.compareTo(b.title));
+    StorageService.saveTasks(_tasks);
+  }
+
+  void clearTasks() {
+    _tasks.clear();
+    StorageService.saveTasks(_tasks);
+    if (!isTestMode) {
+      Get.snackbar('Success', 'All tasks cleared');
+    }
+  }
+
+  List<Task> searchTasks(String query) {
+    if (query.isEmpty) {
+      loadTasks(); // Reload all tasks if query is empty
+      return _tasks;
+    } else {
+      final filtered = _tasks
+          .where(
+            (task) =>
+                task.title.toLowerCase().contains(query.toLowerCase()) ||
+                task.description.toLowerCase().contains(query.toLowerCase()),
+          )
+          .toList();
+      _tasks.assignAll(filtered);
+      return filtered;
+    }
+  }
+
+  void sortByCreationDate() {
+    _tasks.sort((a, b) => a.creationDate.compareTo(b.creationDate));
+    StorageService.saveTasks(_tasks);
+  }
+
+  void sortByCompletionStatus() {
+    _tasks.sort((a, b) => a.isCompleted ? 1 : 0 - (b.isCompleted ? 1 : 0));
+    StorageService.saveTasks(_tasks);
   }
 }

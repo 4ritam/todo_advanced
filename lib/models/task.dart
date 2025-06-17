@@ -18,6 +18,7 @@ class Task {
   String id;
   String title;
   String description;
+  DateTime creationDate = DateTime.now();
   DateTime dueDate;
   Level priority;
   bool isCompleted;
@@ -26,6 +27,7 @@ class Task {
     required this.id,
     required this.title,
     required this.description,
+    DateTime? creationDate,
     required this.dueDate,
     required this.priority,
     this.isCompleted = false,
@@ -36,6 +38,7 @@ class Task {
     'id': id,
     'title': title,
     'description': description,
+    'creationDate': creationDate.toIso8601String(),
     'dueDate': dueDate.toIso8601String(),
     'priority': priority.val,
     'isCompleted': isCompleted,
@@ -46,6 +49,7 @@ class Task {
     id: json['id'],
     title: json['title'],
     description: json['description'],
+    creationDate: DateTime.parse(json['creationDate']),
     dueDate: DateTime.parse(json['dueDate']),
     priority: Level.values.firstWhere((e) => e.val == json['priority']),
     isCompleted: json['isCompleted'],
