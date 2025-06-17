@@ -14,6 +14,11 @@ class TaskController extends GetxController {
   // Getter for tasks
   List<Task> get tasks => _tasks;
 
+  // Flag to determine if GetX is in test mode
+  final bool isTestMode;
+
+  TaskController({this.isTestMode = false});
+
   @override
   void onInit() {
     super.onInit();
@@ -33,6 +38,10 @@ class TaskController extends GetxController {
   void addTask(Task task) async {
     _tasks.add(task);
     final result = await StorageService.saveTasks(_tasks);
+    if (isTestMode) {
+      // In test mode, we don't show snackbars
+      return;
+    }
     result.match(
       (l) => Get.snackbar('Error', 'Failed to save task: ${l.toString()}'),
       (_) => Get.snackbar('Success', 'Task saved successfully'),
@@ -45,11 +54,16 @@ class TaskController extends GetxController {
     if (index != -1) {
       _tasks[index] = task;
       final result = await StorageService.saveTasks(_tasks);
+      if (isTestMode) {
+        // In test mode, we don't show snackbars
+        return;
+      }
       result.match(
         (l) => Get.snackbar('Error', 'Failed to save task: ${l.toString()}'),
         (_) => Get.snackbar('Success', 'Task saved successfully'),
       );
     } else {
+      if (isTestMode) return; // Skip snackbar in test mode
       Get.snackbar('Error', 'Task not found');
     }
   }
@@ -58,6 +72,10 @@ class TaskController extends GetxController {
   void deleteTask(String id) async {
     _tasks.removeWhere((t) => t.id == id);
     final result = await StorageService.saveTasks(_tasks);
+    if (isTestMode) {
+      // In test mode, we don't show snackbars
+      return;
+    }
     result.match(
       (l) => Get.snackbar('Error', 'Failed to delete task: ${l.toString()}'),
       (_) => Get.snackbar('Success', 'Task deleted successfully'),
@@ -71,6 +89,10 @@ class TaskController extends GetxController {
     if (index != -1) {
       _tasks[index].isCompleted = !_tasks[index].isCompleted;
       final result = await StorageService.saveTasks(_tasks);
+      if (isTestMode) {
+        // In test mode, we don't show snackbars
+        return;
+      }
       result.match(
         (l) => Get.snackbar('Error', 'Failed to update task: ${l.toString()}'),
         (_) => Get.snackbar('Success', 'Task updated successfully'),
