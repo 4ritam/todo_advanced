@@ -69,7 +69,9 @@ class TaskDetailModal extends StatelessWidget {
               children: [
                 const Icon(Icons.alarm, size: 18),
                 const SizedBox(width: 8),
-                Text('Reminder: ${task.reminderDateTime!.toLocal()}'),
+                Text(
+                  'Reminder: ${task.reminderDateTime!.toLocal().day}/${task.reminderDateTime!.toLocal().month}/${task.reminderDateTime!.toLocal().year} ${task.reminderDateTime!.toLocal().hour}:${task.reminderDateTime!.toLocal().minute.toString().padLeft(2, '0')}',
+                ),
               ],
             ),
           ],

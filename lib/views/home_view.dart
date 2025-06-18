@@ -13,7 +13,33 @@ class HomeView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('ToDo List')),
+      appBar: AppBar(
+        title: const Text('ToDo List'),
+        actions: [
+          PopupMenuButton<SortOption>(
+            onSelected: _taskController.setSortOption,
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: SortOption.defaultOrder,
+                child: Text('Default'),
+              ),
+              const PopupMenuItem(
+                value: SortOption.dueDate,
+                child: Text('Sort by Due Date'),
+              ),
+              const PopupMenuItem(
+                value: SortOption.creationDate,
+                child: Text('Sort by Creation Date'),
+              ),
+              const PopupMenuItem(
+                value: SortOption.priority,
+                child: Text('Sort by Priority'),
+              ),
+            ],
+          ),
+        ],
+      ),
+
       body: Padding(
         padding: const EdgeInsets.all(8.0),
         child: Column(
@@ -44,28 +70,53 @@ class HomeView extends StatelessWidget {
                     .toList();
                 final completed = allTasks.where((t) => t.isCompleted).toList();
 
-                // Sort incomplete: priority desc
-                // incomplete.sort(
-                //   (a, b) => b.priority.val.compareTo(a.priority.val),
-                // );
-                // Sort incomplete: due date asc
-                incomplete.sort((a, b) {
-                  // Compare by calendar date only (ignore time)
-                  final aDate = DateTime(
-                    a.dueDate.year,
-                    a.dueDate.month,
-                    a.dueDate.day,
-                  );
-                  final bDate = DateTime(
-                    b.dueDate.year,
-                    b.dueDate.month,
-                    b.dueDate.day,
-                  );
-                  final dateCmp = aDate.compareTo(bDate);
-                  if (dateCmp != 0) return dateCmp;
-                  // If same day, higher priority first
-                  return b.priority.val.compareTo(a.priority.val);
-                });
+                // Sort incomplete based on selected sort option
+                switch (_taskController.sortOption.value) {
+                  case SortOption.defaultOrder:
+                    incomplete.sort((a, b) {
+                      final aDate = DateTime(
+                        a.dueDate.year,
+                        a.dueDate.month,
+                        a.dueDate.day,
+                      );
+                      final bDate = DateTime(
+                        b.dueDate.year,
+                        b.dueDate.month,
+                        b.dueDate.day,
+                      );
+                      final dateCmp = aDate.compareTo(bDate);
+                      if (dateCmp != 0) return dateCmp;
+                      return b.priority.val.compareTo(
+                        a.priority.val,
+                      ); // same day, by priority
+                    });
+                    break;
+                  case SortOption.dueDate:
+                    incomplete.sort((a, b) {
+                      final aDate = DateTime(
+                        a.dueDate.year,
+                        a.dueDate.month,
+                        a.dueDate.day,
+                      );
+                      final bDate = DateTime(
+                        b.dueDate.year,
+                        b.dueDate.month,
+                        b.dueDate.day,
+                      );
+                      return aDate.compareTo(bDate);
+                    });
+                    break;
+                  case SortOption.creationDate:
+                    incomplete.sort(
+                      (a, b) => a.creationDate.compareTo(b.creationDate),
+                    );
+                    break;
+                  case SortOption.priority:
+                    incomplete.sort(
+                      (a, b) => b.priority.val.compareTo(a.priority.val),
+                    );
+                    break;
+                }
 
                 return SingleChildScrollView(
                   child: Column(

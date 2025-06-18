@@ -3,6 +3,8 @@ import '../models/task.dart';
 import '../services/storage_service.dart';
 import '../services/notification_service.dart';
 
+enum SortOption { defaultOrder, dueDate, creationDate, priority }
+
 /// TaskController
 /// Manages tasks state and persistence, including reminders.
 class TaskController extends GetxController {
@@ -15,6 +17,12 @@ class TaskController extends GetxController {
   void onInit() {
     super.onInit();
     loadTasks();
+  }
+
+  final sortOption = SortOption.defaultOrder.obs;
+
+  void setSortOption(SortOption option) {
+    sortOption.value = option;
   }
 
   /// Load tasks from storage, assign to list, and schedule pending reminders
