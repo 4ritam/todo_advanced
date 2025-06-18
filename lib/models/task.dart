@@ -22,6 +22,8 @@ class Task {
   DateTime dueDate;
   Level priority;
   bool isCompleted;
+  bool hasReminder = false;
+  DateTime? reminderDateTime;
 
   Task({
     required this.id,
@@ -30,6 +32,8 @@ class Task {
     DateTime? creationDate,
     required this.dueDate,
     required this.priority,
+    this.hasReminder = false,
+    this.reminderDateTime,
     this.isCompleted = false,
   });
 
@@ -42,6 +46,8 @@ class Task {
     'dueDate': dueDate.toIso8601String(),
     'priority': priority.val,
     'isCompleted': isCompleted,
+    'hasReminder': hasReminder,
+    'reminderDateTime': reminderDateTime?.toIso8601String(),
   };
 
   // JSON deserialization
@@ -53,5 +59,9 @@ class Task {
     dueDate: DateTime.parse(json['dueDate']),
     priority: Level.values.firstWhere((e) => e.val == json['priority']),
     isCompleted: json['isCompleted'],
+    hasReminder: json['hasReminder'],
+    reminderDateTime: json['reminderDateTime'] != null
+        ? DateTime.parse(json['reminderDateTime'])
+        : null,
   );
 }

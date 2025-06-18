@@ -3,7 +3,6 @@ import 'package:get/get.dart';
 
 import 'services/notification_service.dart';
 import 'views/home_view.dart';
-import 'views/task_form_view.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,11 +22,7 @@ class MainApp extends StatelessWidget {
         primarySwatch: Colors.blue,
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
-      initialRoute: '/',
-      getPages: [
-        GetPage(name: '/', page: () => HomeView()),
-        GetPage(name: '/task_form', page: () => const TaskFormView()),
-      ],
+      home: HomeView(),
       debugShowCheckedModeBanner: false,
     );
   }

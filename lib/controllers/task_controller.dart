@@ -1,24 +1,15 @@
 import 'package:get/get.dart';
-import 'package:todo_advanced/services/notification_service.dart';
 import '../models/task.dart';
 import '../services/storage_service.dart';
+import '../services/notification_service.dart';
 
 /// TaskController
-/// Manages the state of tasks in the application.
-/// Uses GetX for state management and SharedPreferences for persistent storage.
-/// Provides methods to load, add, update, delete, and toggle task completion.
-/// Uses Either type for error handling.
+/// Manages tasks state and persistence, including reminders.
 class TaskController extends GetxController {
-  // List of tasks managed by this controller.
   final _tasks = <Task>[].obs;
 
-  // Getter for tasks
+  /// Public getter for tasks
   List<Task> get tasks => _tasks;
-
-  // Flag to determine if GetX is in test mode
-  final bool isTestMode;
-
-  TaskController({this.isTestMode = false});
 
   @override
   void onInit() {
@@ -26,161 +17,140 @@ class TaskController extends GetxController {
     loadTasks();
   }
 
-  // Loads tasks from storage and updates the observable list.
+  /// Load tasks from storage, assign to list, and schedule pending reminders
   void loadTasks() async {
-    final saved = await StorageService.readTasks();
-    saved.match(
-      (l) => Get.snackbar('Error', 'Failed to load tasks: ${l.toString()}'),
-      (tasks) => _tasks.assignAll(tasks),
+    final result = await StorageService.readTasks();
+    result.match(
+      (err) => Get.snackbar('Error', 'Failed to load tasks: ${err.toString()}'),
+      (loaded) {
+        _tasks.assignAll(loaded);
+        _scheduleAllReminders();
+      },
     );
   }
 
-  // Adds a new task to the list and saves it to storage.
+  /// Refresh the tasks list, typically after a search or filter change
+  void refreshList() {
+    // Trigger a refresh of the tasks list
+    _tasks.refresh();
+  }
+
+  /// Add a new task: persist, schedule reminder
   void addTask(Task task) async {
     _tasks.add(task);
     final result = await StorageService.saveTasks(_tasks);
 
-    // Schedule a notification for the task if it has a due date
-    if (task.dueDate.isAfter(DateTime.now())) {
-      await NotificationService.scheduleNotification(
-        id: task.hashCode,
-        title: 'Task Reminder',
-        body: task.title,
-        scheduledTime: task.dueDate.subtract(const Duration(hours: 1)),
-      );
-    }
-
-    if (isTestMode) {
-      // In test mode, we don't show snackbars
-      return;
-    }
     result.match(
-      (l) => Get.snackbar('Error', 'Failed to save task: ${l.toString()}'),
-      (_) => Get.snackbar('Success', 'Task saved successfully'),
+      (err) => Get.snackbar('Error', 'Failed to save task: ${err.toString()}'),
+      (_) {
+        Get.snackbar('Success', 'Task added');
+        _scheduleReminder(task);
+      },
     );
   }
 
-  // Updates an existing task and saves the updated list to storage.
+  /// Update an existing task: persist, cancel old and schedule new reminder
   void updateTask(Task task) async {
-    final index = _tasks.indexWhere((t) => t.id == task.id);
-    if (index != -1) {
-      _tasks[index] = task;
-      final result = await StorageService.saveTasks(_tasks);
-
-      // Cancel old notification and reschedule new one
-      await NotificationService.cancelNotification(task.hashCode);
-
-      final reminderTime = task.dueDate.subtract(const Duration(hours: 1));
-      if (reminderTime.isAfter(DateTime.now())) {
-        await NotificationService.scheduleNotification(
-          id: task.hashCode,
-          title: 'Task Reminder',
-          body: task.title,
-          scheduledTime: reminderTime,
-        );
-      }
-
-      result.match(
-        (l) => Get.snackbar('Error', 'Failed to save task: ${l.toString()}'),
-        (_) => Get.snackbar('Success', 'Task updated successfully'),
-      );
-    } else {
+    final idx = _tasks.indexWhere((t) => t.id == task.id);
+    if (idx == -1) {
       Get.snackbar('Error', 'Task not found');
-    }
-  }
-
-  // Deletes a task from the list and saves the updated list to storage.
-  void deleteTask(String id) async {
-    _tasks.removeWhere((t) => t.id == id);
-    final result = await StorageService.saveTasks(_tasks);
-    if (isTestMode) {
-      // In test mode, we don't show snackbars
       return;
     }
+
+    _tasks[idx] = task;
+    final result = await StorageService.saveTasks(_tasks);
+
     result.match(
-      (l) => Get.snackbar('Error', 'Failed to delete task: ${l.toString()}'),
-      (_) => Get.snackbar('Success', 'Task deleted successfully'),
+      (err) => Get.snackbar('Error', 'Failed to save task: ${err.toString()}'),
+      (_) {
+        Get.snackbar('Success', 'Task updated');
+        // Cancel any existing reminder
+        NotificationService.cancelNotification(task.hashCode);
+
+        // Schedule new if needed
+        _scheduleReminder(task);
+      },
     );
-    loadTasks(); // Refresh the task list after deletion
   }
 
-  // Toggles the completion status of a task and saves the updated list to storage.
+  /// Delete a task: persist, cancel reminder
+  void deleteTask(String id) async {
+    final task = _tasks.firstWhereOrNull((t) => t.id == id);
+    if (task == null) {
+      Get.snackbar('Error', 'Task not found');
+      return;
+    }
+    _tasks.remove(task);
+    final result = await StorageService.saveTasks(_tasks);
+
+    result.match(
+      (err) =>
+          Get.snackbar('Error', 'Failed to delete task: ${err.toString()}'),
+      (_) {
+        Get.snackbar('Success', 'Task deleted');
+        NotificationService.cancelNotification(task.hashCode);
+      },
+    );
+    loadTasks(); // Refresh the list after deletion
+  }
+
+  /// Toggle completion: persist, cancel or reschedule reminder
   void toggleTaskCompletion(String id) async {
-    final index = _tasks.indexWhere((t) => t.id == id);
-    if (index != -1) {
-      _tasks[index].isCompleted = !_tasks[index].isCompleted;
+    final idx = _tasks.indexWhere((t) => t.id == id);
+    if (idx == -1) return;
 
-      if (_tasks[index].isCompleted) {
-        await NotificationService.cancelNotification(_tasks[index].hashCode);
-      } else {
-        final reminderTime = _tasks[index].dueDate.subtract(
-          const Duration(hours: 1),
+    final task = _tasks[idx];
+    task.isCompleted = !task.isCompleted;
+
+    final result = await StorageService.saveTasks(_tasks);
+    result.match(
+      (err) =>
+          Get.snackbar('Error', 'Failed to update task: ${err.toString()}'),
+      (_) {
+        Get.snackbar(
+          'Success',
+          'Task ${task.isCompleted ? 'completed' : 'marked as incomplete'}',
         );
-        if (reminderTime.isAfter(DateTime.now())) {
-          await NotificationService.scheduleNotification(
-            id: _tasks[index].hashCode,
-            title: 'Task Reminder',
-            body: _tasks[index].title,
-            scheduledTime: reminderTime,
-          );
+        if (task.isCompleted) {
+          NotificationService.cancelNotification(task.hashCode);
+        } else {
+          _scheduleReminder(task);
         }
-      }
-
-      final result = await StorageService.saveTasks(_tasks);
-      result.match(
-        (l) => Get.snackbar('Error', 'Failed to update task: ${l.toString()}'),
-        (_) => Get.snackbar('Success', 'Task updated successfully'),
-      );
-    }
-  }
-
-  void sortByDueDate() {
-    _tasks.sort((a, b) => a.dueDate.compareTo(b.dueDate));
-    StorageService.saveTasks(_tasks);
-  }
-
-  void sortByPriority() {
-    _tasks.sort((a, b) => a.priority.val.compareTo(b.priority.val));
-    StorageService.saveTasks(_tasks);
-  }
-
-  void sortByTitle() {
-    _tasks.sort((a, b) => a.title.compareTo(b.title));
-    StorageService.saveTasks(_tasks);
-  }
-
-  void clearTasks() {
-    _tasks.clear();
-    StorageService.saveTasks(_tasks);
-    if (!isTestMode) {
-      Get.snackbar('Success', 'All tasks cleared');
-    }
+      },
+    );
+    loadTasks();
   }
 
   List<Task> searchTasks(String query) {
-    if (query.isEmpty) {
-      loadTasks(); // Reload all tasks if query is empty
-      return _tasks;
-    } else {
-      final filtered = _tasks
-          .where(
-            (task) =>
-                task.title.toLowerCase().contains(query.toLowerCase()) ||
-                task.description.toLowerCase().contains(query.toLowerCase()),
-          )
-          .toList();
-      _tasks.assignAll(filtered);
-      return filtered;
+    if (query.isEmpty) return _tasks;
+
+    return _tasks.where((task) {
+      final lowerQuery = query.toLowerCase();
+      return task.title.toLowerCase().contains(lowerQuery) ||
+          task.description.toLowerCase().contains(lowerQuery);
+    }).toList();
+  }
+
+  /// Internal: schedule reminder if task hasReminder and reminderDateTime
+  void _scheduleReminder(Task task) {
+    if (task.hasReminder && task.reminderDateTime != null) {
+      final dt = task.reminderDateTime!;
+      if (dt.isAfter(DateTime.now())) {
+        NotificationService.scheduleNotification(
+          id: task.hashCode,
+          title: task.title,
+          body: task.description,
+          scheduledTime: dt,
+        );
+      }
     }
   }
 
-  void sortByCreationDate() {
-    _tasks.sort((a, b) => a.creationDate.compareTo(b.creationDate));
-    StorageService.saveTasks(_tasks);
-  }
-
-  void sortByCompletionStatus() {
-    _tasks.sort((a, b) => a.isCompleted ? 1 : 0 - (b.isCompleted ? 1 : 0));
-    StorageService.saveTasks(_tasks);
+  /// Internal: schedule all reminders on load
+  void _scheduleAllReminders() {
+    for (final task in _tasks) {
+      NotificationService.cancelNotification(task.hashCode);
+      _scheduleReminder(task);
+    }
   }
 }
