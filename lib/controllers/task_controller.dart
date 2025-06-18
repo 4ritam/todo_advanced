@@ -1,4 +1,5 @@
 import 'package:get/get.dart';
+import 'package:todo_advanced/services/notification_service.dart';
 import '../models/task.dart';
 import '../services/storage_service.dart';
 
@@ -38,6 +39,17 @@ class TaskController extends GetxController {
   void addTask(Task task) async {
     _tasks.add(task);
     final result = await StorageService.saveTasks(_tasks);
+
+    // Schedule a notification for the task if it has a due date
+    if (task.dueDate.isAfter(DateTime.now())) {
+      await NotificationService.scheduleNotification(
+        id: task.hashCode,
+        title: 'Task Reminder',
+        body: task.title,
+        scheduledTime: task.dueDate.subtract(const Duration(hours: 1)),
+      );
+    }
+
     if (isTestMode) {
       // In test mode, we don't show snackbars
       return;
@@ -54,16 +66,25 @@ class TaskController extends GetxController {
     if (index != -1) {
       _tasks[index] = task;
       final result = await StorageService.saveTasks(_tasks);
-      if (isTestMode) {
-        // In test mode, we don't show snackbars
-        return;
+
+      // Cancel old notification and reschedule new one
+      await NotificationService.cancelNotification(task.hashCode);
+
+      final reminderTime = task.dueDate.subtract(const Duration(hours: 1));
+      if (reminderTime.isAfter(DateTime.now())) {
+        await NotificationService.scheduleNotification(
+          id: task.hashCode,
+          title: 'Task Reminder',
+          body: task.title,
+          scheduledTime: reminderTime,
+        );
       }
+
       result.match(
         (l) => Get.snackbar('Error', 'Failed to save task: ${l.toString()}'),
-        (_) => Get.snackbar('Success', 'Task saved successfully'),
+        (_) => Get.snackbar('Success', 'Task updated successfully'),
       );
     } else {
-      if (isTestMode) return; // Skip snackbar in test mode
       Get.snackbar('Error', 'Task not found');
     }
   }
@@ -88,19 +109,28 @@ class TaskController extends GetxController {
     final index = _tasks.indexWhere((t) => t.id == id);
     if (index != -1) {
       _tasks[index].isCompleted = !_tasks[index].isCompleted;
-      final result = await StorageService.saveTasks(_tasks);
-      if (isTestMode) {
-        // In test mode, we don't show snackbars
-        return;
-      }
-      if (result.isLeft()) {
-        Get.snackbar(
-          'Error',
-          'Failed to update task: ${result.getLeft().toString()}',
+
+      if (_tasks[index].isCompleted) {
+        await NotificationService.cancelNotification(_tasks[index].hashCode);
+      } else {
+        final reminderTime = _tasks[index].dueDate.subtract(
+          const Duration(hours: 1),
         );
-        return;
+        if (reminderTime.isAfter(DateTime.now())) {
+          await NotificationService.scheduleNotification(
+            id: _tasks[index].hashCode,
+            title: 'Task Reminder',
+            body: _tasks[index].title,
+            scheduledTime: reminderTime,
+          );
+        }
       }
-      loadTasks(); // Refresh the task list after toggling completion
+
+      final result = await StorageService.saveTasks(_tasks);
+      result.match(
+        (l) => Get.snackbar('Error', 'Failed to update task: ${l.toString()}'),
+        (_) => Get.snackbar('Success', 'Task updated successfully'),
+      );
     }
   }
 
